@@ -79,7 +79,7 @@ async function checkIsCanSpin() {
     // User_ID из сообщений Telegram, если он передаётся в initDataUnsafe (обычно так и есть)
     const tgUserId = tg.initDataUnsafe?.user?.id;
     // TODO: замени на свой URL бэкенда! Например:
-    const apiUrl = `http://45.11.26.222:8000/api/is_can_spin?user_id=12345=${tgUserId}`;
+    const apiUrl = `http://45.11.26.222:8000/api/is_can_spin?user_id=${tgUserId}`;
     // Лучше использовать POST и токены, но для примера GET (или как удобно)
     try {
         const response = await fetch(apiUrl);
@@ -107,6 +107,7 @@ async function checkIsCanSpin() {
 </body>
 
 </html>
+
 
 
 
