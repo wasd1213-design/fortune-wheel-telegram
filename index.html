@@ -40,42 +40,72 @@
 </head>
 <body>
     <canvas id="canvas" width="400" height="400"></canvas>
-    <button onclick="spin()">Крутить</button>
+    <button id="spinBtn">Крутить</button>
     <div id="result"></div>
-    <script>
-      const wheel = new Winwheel({
-        'canvasId': 'canvas',
-        'numSegments': 6,
-        'segments': [
-          {'fillStyle': '#eae56f', 'text': 'Приз 1'},
-          {'fillStyle': '#89f26e', 'text': 'Приз 2'},
-          {'fillStyle': '#7de6ef', 'text': 'Приз 3'},
-          {'fillStyle': '#e7706f', 'text': 'Приз 4'},
-          {'fillStyle': '#eae56f', 'text': 'Приз 5'},
-          {'fillStyle': '#89f26e', 'text': 'Приз 6'}
-        ],
-        'animation': {
-          'type': 'spinToStop',
-          'duration': 4,
-          'spins': 7,
-          'callbackFinished': (indicatedSegment) => {
-        document.getElementById('result').innerText = `Выпало: ${indicatedSegment.text}`;
-        // Телеграм-боту отправляем данные после прокрутки
-        if (window.Telegram && Telegram.WebApp) {
-          Telegram.WebApp.sendData(JSON.stringify({
-            spin: 1,
-            prize: indicatedSegment.text
-          }));
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+const wheel = new Winwheel({
+    'canvasId': 'canvas',
+    'numSegments': 6,
+    'segments': [
+        {'fillStyle': '#eae56f', 'text': 'Приз 1'},
+        {'fillStyle': '#89f26e', 'text': 'Приз 2'},
+        {'fillStyle': '#7de6ef', 'text': 'Приз 3'},
+        {'fillStyle': '#e7706f', 'text': 'Приз 4'},
+        {'fillStyle': '#eae56f', 'text': 'Приз 5'},
+        {'fillStyle': '#89f26e', 'text': 'Приз 6'}
+    ],
+    'animation': {
+        'type': 'spinToStop',
+        'duration': 4,
+        'spins': 7,
+        'callbackFinished': (indicatedSegment) => {
+            document.getElementById('result').innerText = `Выпало: ${indicatedSegment.text}`;
+            // Сообщаем боту, какой приз выпал
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.sendData(JSON.stringify({
+                    spin: 1,
+                    prize: indicatedSegment.text
+                }));
+            }
         }
-      }
     }
-  });
+});
 
-  function spin() {
-    wheel.startAnimation();
-  }
+document.getElementById('spinBtn').addEventListener('click', checkIsCanSpin);
+
+async function checkIsCanSpin() {
+    const tg = window.Telegram.WebApp;
+    // User_ID из сообщений Telegram, если он передаётся в initDataUnsafe (обычно так и есть)
+    const tgUserId = tg.initDataUnsafe?.user?.id;
+    // TODO: замени на свой URL бэкенда! Например:
+    const apiUrl = `https://YOUR-BACKEND-DOMAIN.ru/api/is_can_spin?user_id=${tgUserId}`;
+    // Лучше использовать POST и токены, но для примера GET (или как удобно)
+    try {
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        if (data.can_spin) {
+            // Можно! Запускаем колесо
+            wheel.startAnimation();
+        } else {
+            // Нельзя, показываем всплывающее окно с оставшимся временем
+            if (tg && tg.showPopup) {
+                tg.showPopup({
+                    title: "Подождите!",
+                    message: data.wait_msg || "Попробуйте позже",
+                    buttons: [{id: "ok", type: "close", text: "Ок"}]
+                });
+            } else {
+                alert(data.wait_msg || "Попробуйте позже");
+            }
+        }
+    } catch (e) {
+        alert("Ошибка соединения с сервером!");
+    }
+}
 </script>
 </body>
 
 </html>
+
 
