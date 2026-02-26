@@ -2,113 +2,205 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Колесо фортуны</title>
-    <script src="gsap.min.js"></script>
-    <script src="Winwheel.min.js"></script>
-    <!-- Подключение библиотеки для анимации -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.6.0/gsap.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/winwheel@2.8.0/Winwheel.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Колесо Фортуны</title>
+    <!-- Подключаем скрипт Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e24; /* Темный фон, приятный для глаз */
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
             height: 100vh;
-            background: #f8f8f8;
+            overflow: hidden;
         }
-        #canvas {
-            margin-top: 20px;
-            background: #fff;
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Указатель (стрелочка) сверху */
+        .pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #ff3366; /* Яркая розовая стрелка */
+            z-index: 10;
+            filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.5));
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
-            box-shadow: 0 0 15px #bbb;
-            display: block;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5), 0 0 0 5px #2c2c35;
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99); /* Плавная анимация остановки */
         }
-        #result {
-            margin: 16px 0;
-            font-size: 1.2em;
-            color: #333;
-        }
-        button {
-            margin-top: 20px;
-            padding: 8px 18px;
-            font-size: 1.15em;
+
+        .spin-btn {
+            margin-top: 40px;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(45deg, #FF9800, #FF5722);
+            border: none;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4);
             cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        .spin-btn:active {
+            transform: scale(0.95);
+        }
+
+        .spin-btn:disabled {
+            background: #555;
+            box-shadow: none;
+            cursor: not-allowed;
+            color: #888;
         }
     </style>
 </head>
 <body>
-    <canvas id="canvas" width="400" height="400"></canvas>
-    <button id="spinBtn">Крутить</button>
-    <div id="result"></div>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script>
-const wheel = new Winwheel({
-    'canvasId': 'canvas',
-    'numSegments': 6,
-    'segments': [
-        {'fillStyle': '#eae56f', 'text': 'Приз 1'},
-        {'fillStyle': '#89f26e', 'text': 'Приз 2'},
-        {'fillStyle': '#7de6ef', 'text': 'Приз 3'},
-        {'fillStyle': '#e7706f', 'text': 'Приз 4'},
-        {'fillStyle': '#eae56f', 'text': 'Приз 5'},
-        {'fillStyle': '#89f26e', 'text': 'Приз 6'}
-    ],
-    'animation': {
-        'type': 'spinToStop',
-        'duration': 4,
-        'spins': 7,
-        'callbackFinished': (indicatedSegment) => {
-            document.getElementById('result').innerText = `Выпало: ${indicatedSegment.text}`;
-            // Сообщаем боту, какой приз выпал
-            if (window.Telegram && Telegram.WebApp) {
-                Telegram.WebApp.sendData(JSON.stringify({
-                    spin: 1,
-                    prize: indicatedSegment.text
-                }));
+
+    <h1>Испытай удачу!</h1>
+
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="400" height="400"></canvas>
+    </div>
+
+    <button id="spinBtn" class="spin-btn">КРУТИТЬ КОЛЕСО</button>
+
+    <script>
+        // Инициализация Telegram
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Расширяем на весь экран
+
+        const canvas = document.getElementById("wheel");
+        const ctx = canvas.getContext("2d");
+        const spinBtn = document.getElementById("spinBtn");
+
+        // Наши новые сектора
+        const sectors = [
+            { label: "Ничего", color: "#808080", code: "nothing" },          // Серый
+            { label: "+1 Билет", color: "#4CAF50", code: "ticket_1" },       // Зеленый
+            { label: "+2 Билета", color: "#2196F3", code: "ticket_2" },      // Синий
+            { label: "+5% к Шансу", color: "#FF9800", code: "chance_5" },    // Оранжевый
+            { label: "+10% к Шансу", color: "#9C27B0", code: "chance_10" },  // Фиолетовый
+            { label: "ДЖЕКПОТ +25%", color: "#FFD700", code: "jackpot" }     // Золотой
+        ];
+
+        const numSectors = sectors.length;
+        const arc = (2 * Math.PI) / numSectors;
+        let currentRotation = 0; // Текущий угол поворота колеса
+
+        // Функция отрисовки колеса
+        function drawWheel() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = centerX;
+
+            for (let i = 0; i < numSectors; i++) {
+                const angle = i * arc;
+                
+                // Рисуем сектор
+                ctx.beginPath();
+                ctx.fillStyle = sectors[i].color;
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + arc);
+                ctx.lineTo(centerX, centerY);
+                ctx.fill();
+                
+                // Границы секторов
+                ctx.strokeStyle = "#1e1e24";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Рисуем текст
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + arc / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 20px sans-serif";
+                
+                // Для золотого сектора делаем текст черным, чтобы лучше читалось
+                if(sectors[i].color === "#FFD700" || sectors[i].color === "#4CAF50") {
+                    ctx.fillStyle = "#000";
+                }
+                
+                ctx.fillText(sectors[i].label, radius - 20, 10);
+                ctx.restore();
             }
         }
-    }
-});
 
-document.getElementById('spinBtn').addEventListener('click', checkIsCanSpin);
+        drawWheel();
 
-async function checkIsCanSpin() {
-    const tg = window.Telegram.WebApp;
-    // User_ID из сообщений Telegram, если он передаётся в initDataUnsafe (обычно так и есть)
-    const tgUserId = tg.initDataUnsafe?.user?.id;
-    // TODO: замени на свой URL бэкенда! Например:
-    const apiUrl = `https://moygiveawaybot.ru/api/is_can_spin?user_id=${tgUserId}`;
-    // Лучше использовать POST и токены, но для примера GET (или как удобно)
-    try {
-        const response = await fetch(apiUrl);
-        const data = await response.json();
-        if (data.can_spin) {
-            // Можно! Запускаем колесо
-            wheel.startAnimation();
-        } else {
-            // Нельзя, показываем всплывающее окно с оставшимся временем
-            if (tg && tg.showPopup) {
-                tg.showPopup({
-                    title: "Подождите!",
-                    message: data.wait_msg || "Попробуйте позже",
-                    buttons: [{id: "ok", type: "close", text: "Ок"}]
+        // Логика вращения
+        spinBtn.addEventListener("click", () => {
+            spinBtn.disabled = true; // Отключаем кнопку, чтобы не нажали дважды
+            
+            // Генерируем случайное количество градусов для вращения (от 5 до 10 полных оборотов + случайный сектор)
+            const spins = Math.floor(Math.random() * 5) + 5; 
+            const degrees = Math.floor(Math.random() * 360);
+            const totalRotation = (spins * 360) + degrees;
+            
+            currentRotation += totalRotation;
+            
+            // Применяем вращение через CSS
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            // Ждем 4 секунды (пока идет CSS анимация)
+            setTimeout(() => {
+                // Вычисляем, какой сектор оказался под стрелкой
+                // Стрелка находится наверху (270 градусов относительно нулевой оси холста)
+                const normalizedRotation = currentRotation % 360;
+                
+                // Высчитываем выигранный сектор (учитываем, что холст крутится по часовой, а сектора отрисованы тоже по часовой)
+                // Смещение на 90 градусов, потому что стрелка сверху
+                let winningAngle = (360 - normalizedRotation + 270) % 360;
+                let winningIndex = Math.floor(winningAngle / (360 / numSectors));
+                
+                let prize = sectors[winningIndex];
+
+                // Сообщаем Telegram боту, что мы выиграли
+                // Отправляем JSON строку с кодом приза
+                let dataToSend = JSON.stringify({ action: "spin_result", prize: prize.code, label: prize.label });
+                tg.sendData(dataToSend);
+
+                // Даем кнопку "Закрыть" от телеграма
+                tg.MainButton.text = "ЗАБРАТЬ ПРИЗ";
+                tg.MainButton.show();
+                tg.MainButton.onClick(() => {
+                    tg.close();
                 });
-            } else {
-                alert(data.wait_msg || "Попробуйте позже");
-            }
-        }
-    } catch (e) {
-        alert("Ошибка соединения с сервером!");
-    }
-}
-</script>
+
+            }, 4000); // 4000мс = 4 секунды (время CSS transition)
+        });
+    </script>
 </body>
-
 </html>
-
-
-
-
-
